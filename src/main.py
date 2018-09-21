@@ -15,12 +15,38 @@ blue_pin = machine.Pin(5)
 blue_pwm = machine.PWM(blue_pin)
 
 
+def cie1931_table():
+    # see https://jared.geek.nz/2013/feb/linear-led-pwm
+    # the CIE 1931 lightness formula describes how humans actually perceive light
+    # using it we can define the pwm signal for the color codes more human friendly
+    INPUT_SIZE = 255       # Input integer size
+    OUTPUT_SIZE = 1024      # Output integer size
+    INT_TYPE = 'const unsigned char'
+    TABLE_NAME = 'cie'
+
+    def cie1931(L):
+        L = L*100.0
+        if L <= 8:
+            return (L/902.3)
+        else:
+            return ((L+16.0)/116.0)**3
+
+    x = range(0,int(INPUT_SIZE+1))
+    y = [round(cie1931(float(L)/INPUT_SIZE)*OUTPUT_SIZE) for L in x]
+    print(y)
+    return y
+
+cie = cie1931_table()
+
 def setup_pwm(pwm):
     pwm.freq(500)
     pwm.duty(0)
 
-def getPinStatus():
-  return LEDS
+
+def color(red=0, green=0, blue=0):
+    red_pwm.duty(red)
+    green_pwm.duty(green)
+    blue_pwm.duty(blue)
 
 def buildResponse(response):
   # BUILD DE HTTP RESPONSE HEADERS
@@ -42,10 +68,48 @@ def parseURL(url):
 
   return path.group(1), parameters
 
-def color(red=0, green=0, blue=0):
-    red_pwm.duty(red)
-    green_pwm.duty(green)
-    blue_pwm.duty(blue)
+
+def transfer_data_to_pwm(request_data):
+    data = ujson.loads(str(request_data, 'utf-8'))
+    print("DATA:", data)
+    data_rgb = {}
+
+    if 'hex' in data:
+        data_rgb = convert_hex(data['hex'])
+    else:
+        if 'red' in data:
+            data_rgb['red'] = data['red']
+
+        if 'green' in data:
+            data_rgb['green'] = data['green']
+
+        if 'blue' in data:
+            data_rgb['blue'] = data['blue']
+
+    print("DATA_RGB:", data_rgb)
+    return rgb_to_pwm(data_rgb)
+
+
+def rgb_to_pwm(data_rgb):
+    data_pwm = {k: cie[v] for k, v in data_rgb.items()}
+
+    return data_pwm
+
+def rgb_value_to_pwm(value, leftMin, leftMax, rightMin, rightMax):
+    # Figure out how 'wide' each range is
+    leftSpan = leftMax - leftMin
+    rightSpan = rightMax - rightMin
+
+    # Convert the left range into a 0-1 range (float)
+    valueScaled = float(value - leftMin) / float(leftSpan)
+
+    # Convert the 0-1 range into a value in the right range.
+    return int(rightMin + (valueScaled * rightSpan))
+
+def convert_hex(hex):
+    hex = hex.lstrip('#')
+    return {k: int(hex[i:i+2], 16) for k, i in {'red': 0, 'green': 2 ,'blue': 4}.items()}
+
 
 setup_pwm(red_pwm)
 setup_pwm(green_pwm)
@@ -69,22 +133,14 @@ while True:
     if obj:
         print(obj.group(1))
         path, get_parameters = parseURL(obj.group(1))
-        if path.startswith("/getPinStatus"):
-            cl.send(buildResponse("LED STATUS:\n%s" % "\n".join([str(x.value()) for x in getPinStatus()])))
-        elif path.startswith("/api/color"):
+        if path.startswith("/api/color"):
             match = ure.search('Content-Length: ([0-9]+)\r\n\r\n$', request)
             data = {}
 
             if match:
-                data, addr = cl.recvfrom(int(match.group(1)))
-                data = ujson.loads(str(data, 'utf-8'))
+                data = cl.recv(int(match.group(1)))
                 print("DATA:", data)
-
-                color_data = {
-                    'red': data.get('red', 0),
-                    'green': data.get('green', 0),
-                    'blue': data.get('blue', 0),
-                }
+                color_data = transfer_data_to_pwm(data)
                 color(color_data['red'], color_data['green'], color_data['blue'])
                 cl.send(buildResponse("COLOR SET TO:\nRED=%s GREEN=%s BLUE=%s" % (color_data['red'], color_data['green'], color_data['blue'])))
             else:
