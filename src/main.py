@@ -4,7 +4,34 @@ import socket
 import ure
 import ujson
 import time
+import network
+import uos
 
+
+def parse_config_line(line):
+    pattern = "(.*)=(.*)"
+    line_stripped = line.rstrip('\n')
+    return ure.search(pattern, line_stripped).group(1), ure.search(pattern, line_stripped).group(2)
+
+config = {}
+
+if '.env' in uos.listdir():
+    config = {parse_config_line(line)[0]:parse_config_line(line)[1] for line in open('.env')}
+
+def do_connect():
+    if 'ssid' in config and 'pass' in config:
+        sta_if = network.WLAN(network.STA_IF)
+        if not sta_if.isconnected():
+            print('connecting to network...')
+            sta_if.active(True)
+            sta_if.connect(config['ssid'], config['pass'])
+            while not sta_if.isconnected():
+                pass
+        print('network config:', sta_if.ifconfig())
+    else:
+        print('No network config provided, cannot login to Wifi!')
+
+do_connect()
 
 LEDS = [machine.Pin(i, machine.Pin.OUT) for i in (0, 4, 5)]
 red_pin = machine.Pin(0)
