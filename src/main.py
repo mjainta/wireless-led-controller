@@ -3,7 +3,7 @@ import time
 import ure
 
 from config import config
-from led import set_color_by_request
+from led import set_color_by_request, set_fade_by_request
 
 
 def buildResponse(response):
@@ -57,6 +57,18 @@ while True:
                 cl.send(buildResponse("COLOR SET TO:\nRED=%s GREEN=%s BLUE=%s" % (color_data['red'], color_data['green'], color_data['blue'])))
             else:
                 cl.send(buildResponse("UNREGISTERED ACTION\r\nPATH: %s\r\nPARAMETERS: %s" % (path, get_parameters)))
+        elif path.startswith("/api/fade"):
+            match = ure.search('Content-Length: ([0-9]+)\r\n\r\n$', request)
+            data = {}
+
+            if match:
+                data = cl.recv(int(match.group(1)))
+                print("DATA:", data)
+                color_data = set_fade_by_request(data)
+                cl.send(buildResponse("COLOR FADE TO:\nRED=%s GREEN=%s BLUE=%s" % (color_data['red'], color_data['green'], color_data['blue'])))
+            else:
+                cl.send(buildResponse("UNREGISTERED ACTION\r\nPATH: %s\r\nPARAMETERS: %s" % (path, get_parameters)))
+
     else:
         print("INVALID REQUEST HERE")
         cl.send(buildResponse("INVALID REQUEST"))

@@ -1,7 +1,10 @@
 
 .PHONY: main
-main:
-	ampy --port /dev/ttyUSB0 run -n src/main.py
+put:
+	ampy --port /dev/ttyUSB0 put src/boot.py
+	ampy --port /dev/ttyUSB0 put src/config.py
+	ampy --port /dev/ttyUSB0 put src/led.py
+	ampy --port /dev/ttyUSB0 put src/main.py
 
 .PHONY: repl
 repl:
