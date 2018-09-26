@@ -1,5 +1,6 @@
 import socket
 import time
+import ujson
 import ure
 
 from config import config
@@ -52,22 +53,28 @@ while True:
 
             if match:
                 data = cl.recv(int(match.group(1)))
-                print("DATA:", data)
-                color_data = set_color_by_request(data)
+                print('DATA:', data)
+                json_data = ujson.loads(str(data, 'utf-8'))
+                print('JSON DATA:', json_data)
+                color_data = set_color_by_request(json_data)
                 cl.send(buildResponse("COLOR SET TO:\nRED=%s GREEN=%s BLUE=%s" % (color_data['red'], color_data['green'], color_data['blue'])))
             else:
-                cl.send(buildResponse("UNREGISTERED ACTION\r\nPATH: %s\r\nPARAMETERS: %s" % (path, get_parameters)))
+                cl.send(buildResponse("NO VALID DATA SENT"))
         elif path.startswith("/api/fade"):
             match = ure.search('Content-Length: ([0-9]+)\r\n\r\n$', request)
             data = {}
 
             if match:
                 data = cl.recv(int(match.group(1)))
-                print("DATA:", data)
-                color_data = set_fade_by_request(data)
+                print('DATA:', data)
+                json_data = ujson.loads(str(data, 'utf-8'))
+                print('JSON DATA:', json_data)
+                color_data = set_fade_by_request(json_data)
                 cl.send(buildResponse("COLOR FADE TO:\nRED=%s GREEN=%s BLUE=%s" % (color_data['red'], color_data['green'], color_data['blue'])))
             else:
-                cl.send(buildResponse("UNREGISTERED ACTION\r\nPATH: %s\r\nPARAMETERS: %s" % (path, get_parameters)))
+                cl.send(buildResponse("NO VALID DATA SENT"))
+        else:
+            cl.send(buildResponse("UNREGISTERED ACTION\r\nPATH: %s\r\nPARAMETERS: %s" % (path, get_parameters)))
 
     else:
         print("INVALID REQUEST HERE")

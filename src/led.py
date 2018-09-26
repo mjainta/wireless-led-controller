@@ -1,5 +1,4 @@
 import machine
-import ujson
 import utime
 
 
@@ -30,22 +29,45 @@ def cie1931_table():
     return y
 
 
-def setup_pwm(pwm):
-    pwm.freq(500)
-    pwm.duty(0)
+def update_color_values(color_data):
+    global red_value, green_value, blue_value
+    red_value = color_data['red']
+    green_value = color_data['green']
+    blue_value = color_data['blue']
 
 
-def set_color_by_request(request_data):
-    pwm_data = extract_color_pwm_data(request_data)
-    set_color(pwm_data['red'], pwm_data['green'], pwm_data['blue'])
-    return pwm_data
+def get_current_value():
+    global red_value, green_value, blue_value
+    return {'red': red_value, 'green': green_value, 'blue': blue_value}
 
-def set_fade_by_request(request_data):
-    rgb_data = extract_color_rgb_data(request_data)
-    pwm_data = rgb_to_pwm(rgb_data)
-    fade_time = extract_fade_time(request_data)
+
+def set_color_by_request(data):
+    rgb_data = extract_color_rgb_data(data)
+    set_color_rgb(rgb_data)
+    return rgb_data
+
+
+def set_fade_by_request(data):
+    rgb_data = extract_color_rgb_data(data)
+
+    try:
+        fade_time = int(data['fade_time'])
+    except ValueError:
+        fade_time = 0
+
     set_fade(rgb_data, fade_time)
-    return pwm_data
+    return rgb_data
+
+
+def set_color_rgb(color_data):
+    color_data_pwm = rgb_to_pwm_color(color_data)
+    update_color_values(color_data)
+    print('NEW RED VALUE:', color_data['red'])
+    print('NEW GREEN VALUE:', color_data['green'])
+    print('NEW BLUE VALUE:', color_data['blue'])
+    red_pwm.duty(color_data_pwm['red'])
+    green_pwm.duty(color_data_pwm['green'])
+    blue_pwm.duty(color_data_pwm['blue'])
 
 
 def set_color(red=0, green=0, blue=0):
@@ -55,19 +77,21 @@ def set_color(red=0, green=0, blue=0):
 
 
 def set_fade(target_color, fade_time):
-    global red_value, green_value, blue_value
+    color_current = get_current_value()
     diff_color = {
-        'red': target_color['red'] - red_value,
-        'green': target_color['green'] - green_value,
-        'blue': target_color['blue'] - blue_value,
+        'red': target_color['red'] - color_current['red'],
+        'green': target_color['green'] - color_current['green'],
+        'blue': target_color['blue'] - color_current['blue'],
     }
     initial_color = {
-        'red': red_value,
-        'green': green_value,
-        'blue': blue_value,
+        'red': color_current['red'],
+        'green': color_current['green'],
+        'blue': color_current['blue'],
     }
     interval = 20
     current_duration = 0
+
+    print('FADE TIME:', fade_time)
 
     while current_duration < fade_time:
         current_duration = current_duration + interval
@@ -76,37 +100,27 @@ def set_fade(target_color, fade_time):
             'green': initial_color['green'] + int(current_duration * diff_color['green'] / fade_time),
             'blue': initial_color['blue'] + int(current_duration * diff_color['blue'] / fade_time),
         }
-        print('COLOR FADE TO:', current_color)
-        current_color_pwm = rgb_to_pwm(current_color)
+        current_color_pwm = rgb_to_pwm_color(current_color)
         set_color(current_color_pwm['red'], current_color_pwm['green'], current_color_pwm['blue'])
-        red_value = current_color['red']
-        green_value = current_color['green']
-        blue_value = current_color['blue']
+        update_color_values(current_color)
         utime.sleep_ms(interval)
 
-    target_color_pwm = rgb_to_pwm(target_color)
+    target_color_pwm = rgb_to_pwm_color(target_color)
     set_color(target_color_pwm['red'], target_color_pwm['green'], target_color_pwm['blue'])
-    red_value = target_color['red']
-    green_value = target_color['green']
-    blue_value = target_color['blue']
-    print('RED_VALUE:', red_value)
-    print('GREEN_VALUE:', green_value)
-    print('BLUE_VALUE:', blue_value)
+    update_color_values(target_color)
 
 
-def extract_color_rgb_data(request_data):
-    data = ujson.loads(str(request_data, 'utf-8'))
-
-    for color, strength in data.items():
+def extract_color_rgb_data(data):
+    for color, value in data.items():
         try:
             if color is not 'hex':
-                data[color] = int(strength)
+                data[color] = int(value)
             else:
-                data[color] = str(strength)
+                data[color] = str(value)
         except ValueError:
             data[color] = 0
 
-    print("DATA:", data)
+    print("PARSED DATA JSON:", data)
     data_rgb = {
         'red': 0,
         'green': 0,
@@ -114,7 +128,7 @@ def extract_color_rgb_data(request_data):
     }
 
     if 'hex' in data:
-        data_rgb = convert_hex(data['hex'])
+        data_rgb = convert_hex_to_rgb(data['hex'])
     else:
         if 'red' in data:
             data_rgb['red'] = data['red']
@@ -125,40 +139,28 @@ def extract_color_rgb_data(request_data):
         if 'blue' in data:
             data_rgb['blue'] = data['blue']
 
-    # Restrict color strengths between 0 and 255
-    data_rgb = {color: max(0, min(255, strength)) for color, strength in data_rgb.items()}
-    print("DATA_RGB:", data_rgb)
+    # Restrict color values between 0 and 255
+    data_rgb = {color: max(0, min(255, value)) for color, value in data_rgb.items()}
+    print("PARSED DATA RGB:", data_rgb)
     return data_rgb
 
 
-def extract_color_pwm_data(request_data):
-    global red_value, green_value, blue_value
-    rgb_data = extract_color_rgb_data(request_data)
-    red_value = rgb_data['red']
-    green_value = rgb_data['green']
-    blue_value = rgb_data['blue']
-    return rgb_to_pwm(rgb_data)
+def get_cie(value):
+    return cie[max(0, min(255, value))]
 
 
-def extract_fade_time(request_data):
-    data = ujson.loads(str(request_data, 'utf-8'))
-
-    try:
-        fade_time = int(data['fade_time'])
-    except ValueError:
-        fade_time = 0
-
-    return fade_time
+def rgb_to_pwm_color(color_data):
+    return {key: get_cie(value) for key, value in color_data.items()}
 
 
-def rgb_to_pwm(data_rgb):
-    data_pwm = {color: cie[max(0, min(255, strength))] for color, strength in data_rgb.items()}
-
-    return data_pwm
-
-def convert_hex(hex):
+def convert_hex_to_rgb(hex):
     hex = hex.lstrip('#')
     return {k: int(hex[i:i+2], 16) for k, i in {'red': 0, 'green': 2 ,'blue': 4}.items()}
+
+
+def setup_pwm(pwm):
+    pwm.freq(500)
+    pwm.duty(0)
 
 
 LEDS = [machine.Pin(i, machine.Pin.OUT) for i in (0, 4, 5)]
