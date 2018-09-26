@@ -60,20 +60,12 @@ def set_fade_by_request(data):
 
 
 def set_color_rgb(color_data):
-    color_data_pwm = rgb_to_pwm_color(color_data)
+    color_data_pwm = {key: get_cie(value) for key, value in color_data.items()}
     update_color_values(color_data)
-    print('NEW RED VALUE:', color_data['red'])
-    print('NEW GREEN VALUE:', color_data['green'])
-    print('NEW BLUE VALUE:', color_data['blue'])
+    print('NEW COLOR:', color_data)
     red_pwm.duty(color_data_pwm['red'])
     green_pwm.duty(color_data_pwm['green'])
     blue_pwm.duty(color_data_pwm['blue'])
-
-
-def set_color(red=0, green=0, blue=0):
-    red_pwm.duty(red)
-    green_pwm.duty(green)
-    blue_pwm.duty(blue)
 
 
 def set_fade(target_color, fade_time):
@@ -100,13 +92,11 @@ def set_fade(target_color, fade_time):
             'green': initial_color['green'] + int(current_duration * diff_color['green'] / fade_time),
             'blue': initial_color['blue'] + int(current_duration * diff_color['blue'] / fade_time),
         }
-        current_color_pwm = rgb_to_pwm_color(current_color)
-        set_color(current_color_pwm['red'], current_color_pwm['green'], current_color_pwm['blue'])
+        set_color_rgb(current_color)
         update_color_values(current_color)
         utime.sleep_ms(interval)
 
-    target_color_pwm = rgb_to_pwm_color(target_color)
-    set_color(target_color_pwm['red'], target_color_pwm['green'], target_color_pwm['blue'])
+    set_color_rgb(target_color)
     update_color_values(target_color)
 
 
@@ -147,10 +137,6 @@ def extract_color_rgb_data(data):
 
 def get_cie(value):
     return cie[max(0, min(255, value))]
-
-
-def rgb_to_pwm_color(color_data):
-    return {key: get_cie(value) for key, value in color_data.items()}
 
 
 def convert_hex_to_rgb(hex):
