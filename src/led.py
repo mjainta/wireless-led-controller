@@ -115,6 +115,7 @@ def extract_color_rgb_data(data):
         'red': 0,
         'green': 0,
         'blue': 0,
+        'fade_time': 0,
     }
 
     if 'hex' in data:
@@ -131,6 +132,10 @@ def extract_color_rgb_data(data):
 
     # Restrict color values between 0 and 255
     data_rgb = {color: max(0, min(255, value)) for color, value in data_rgb.items()}
+
+    if 'fade_time' in data:
+        data_rgb['fade_time'] = data['fade_time']
+
     print("PARSED DATA RGB:", data_rgb)
     return data_rgb
 

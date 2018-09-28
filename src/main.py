@@ -48,7 +48,7 @@ while True:
         print(obj.group(1))
         path, get_parameters = parseURL(obj.group(1))
         if path.startswith("/api/color"):
-            match = ure.search('Content-Length: ([0-9]+)\r\n\r\n$', request)
+            match = ure.search('Content-Length: ([0-9]+)', request)
             data = {}
 
             if match:
@@ -61,7 +61,7 @@ while True:
             else:
                 cl.send(buildResponse("NO VALID DATA SENT"))
         elif path.startswith("/api/fade"):
-            match = ure.search('Content-Length: ([0-9]+)\r\n\r\n$', request)
+            match = ure.search('Content-Length: ([0-9]+)', request)
             data = {}
 
             if match:
